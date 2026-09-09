@@ -1,0 +1,10 @@
+Package: com.6866.touchx.sqinterfaceprobe
+Name: Touch X SQ Interface Probe
+Version: 0.1
+Architecture: iphoneos-arm64
+Description: Temporary read-only SpringBoard Objective-C interface inventory probe
+Maintainer: 6866
+Author: 6866
+Section: Development
+Depends: firmware (>= 16.0), ellekit
+Conflicts: com.6866.touchx.sqinterfaceprobe

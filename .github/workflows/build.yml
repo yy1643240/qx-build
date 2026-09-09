@@ -1,0 +1,30 @@
+name: Release
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tooling
+        run: |
+          brew install ldid
+          git clone --depth=1 --recursive https://github.com/theos/theos.git "$HOME/theos"
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          ln -s "$SDK" "$HOME/theos/sdks/iPhoneOS16.5.sdk"
+      - name: Build package
+        env:
+          THEOS: ${{ runner.temp }}/theos
+        run: |
+          mv "$HOME/theos" "$THEOS"
+          make package FINALPACKAGE=1
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: .packages/*.deb
+          if-no-files-found: error
