@@ -1,50 +1,46 @@
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
 
-static NSArray<NSString *> *TXSelectors(void) {
-    return @[
-        // Siri
-        @"handleSiriButtonDownEventFromSource:activationEvent:", @"handleSiriButtonUpEventFromSource:",
-        // Media
-        @"togglePlayPause", @"play", @"pause", @"changeTrack:", @"nextTrack", @"previousTrack", @"setNowPlayingApplicationIsPlaying:",
-        // Volume and ringer
-        @"_effectiveVolume", @"setActiveCategoryVolume:", @"volumeStepUp", @"volumeStepDown", @"setVolume:", @"setVolumeTo:",
-        @"isRingerMuted", @"setRingerMuted:", @"setRingerMuted:withFeedback:reason:clientType:",
-        // Screenshot / clipboard-adjacent system entry points only; no image or clipboard is read.
-        @"takeScreenshot", @"saveScreenshotsWithCompletion:",
-        // Explicit user-triggered system recording only.
-        @"isRecording", @"startSystemRecordingWithMicrophoneEnabled:handler:", @"stopSystemRecording:",
-        // VPN
-        @"vpnActiveForSpecifier:", @"setVPNActive:"
-    ];
+static void TXLog(NSString *event) {
+    NSString *line=[NSString stringWithFormat:@"%@ %@\n",[NSDate date],event];
+    NSString *path=@"/var/jb/tmp/touchx-sq-action-trace.txt";
+    NSFileHandle *f=[NSFileHandle fileHandleForWritingAtPath:path];
+    if(!f){[[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];f=[NSFileHandle fileHandleForWritingAtPath:path];}
+    [f seekToEndOfFile];[f writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];[f closeFile];NSLog(@"[TouchXTrace] %@",event);
 }
 
-static BOOL TXInterestingClassName(NSString *name) {
-    NSString *lower=name.lowercaseString;
-    return [lower containsString:@"hammer"] || [lower containsString:@"sirigesture"] || [lower containsString:@"squidextender"];
+static void TXHookVoid0(Class cls, SEL sel) {
+    Method m=class_getInstanceMethod(cls,sel);if(!m)return;IMP old=method_getImplementation(m);NSString *name=[NSString stringWithFormat:@"%@ %@",NSStringFromClass(cls),NSStringFromSelector(sel)];
+    IMP imp=imp_implementationWithBlock(^(id self){TXLog(name);((void(*)(id,SEL))old)(self,sel);});method_setImplementation(m,imp);
 }
-
-static void TXProbe(void) {
-    NSMutableString *out=[NSMutableString stringWithString:@"[TouchXProbe v0.2] BEGIN: read-only Objective-C capability inventory\n"];
-    unsigned count=0; Class *classes=objc_copyClassList(&count);
-    for (NSString *selectorName in TXSelectors()) {
-        SEL selector=NSSelectorFromString(selectorName); NSMutableArray<NSString *> *hits=[NSMutableArray array];
-        for (unsigned i=0;i<count;i++) {
-            Method method=class_getInstanceMethod(classes[i],selector); if(!method) continue;
-            const char *types=method_getTypeEncoding(method);
-            [hits addObject:[NSString stringWithFormat:@"%@ | %@",NSStringFromClass(classes[i]),types?@(types):@"?"]];
-        }
-        [out appendFormat:@"[TouchXProbe] %@ => %@\n",selectorName,hits.count?[hits componentsJoinedByString:@" ; "]:@"NOT_FOUND"];
-    }
-    NSMutableArray<NSString *> *thirdPartyClasses=[NSMutableArray array];
-    for(unsigned i=0;i<count;i++){NSString *name=NSStringFromClass(classes[i]);if(TXInterestingClassName(name))[thirdPartyClasses addObject:name];}
-    [thirdPartyClasses sortUsingSelector:@selector(compare:)];
-    [out appendFormat:@"[TouchXProbe] third-party class-name presence => %@\n",thirdPartyClasses.count?[thirdPartyClasses componentsJoinedByString:@" ; "]:@"NONE"];
-    free(classes);
-    [out appendString:@"[TouchXProbe v0.2] END\n"];
-    NSLog(@"%@",out);
-    [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/jb/tmp" withIntermediateDirectories:YES attributes:nil error:nil];
-    [out writeToFile:@"/var/jb/tmp/touchx-sq-interface-probe.txt" atomically:YES encoding:NSUTF8StringEncoding error:nil];
+static void TXHookVoidBool(Class cls, SEL sel) {
+    Method m=class_getInstanceMethod(cls,sel);if(!m)return;IMP old=method_getImplementation(m);NSString *name=[NSString stringWithFormat:@"%@ %@",NSStringFromClass(cls),NSStringFromSelector(sel)];
+    IMP imp=imp_implementationWithBlock(^(id self,BOOL value){TXLog(name);((void(*)(id,SEL,BOOL))old)(self,sel,value);});method_setImplementation(m,imp);
 }
-
-%ctor { dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(2*NSEC_PER_SEC)),dispatch_get_main_queue(),^{ TXProbe(); }); }
+static void TXHookVoidFloat(Class cls, SEL sel) {
+    Method m=class_getInstanceMethod(cls,sel);if(!m)return;IMP old=method_getImplementation(m);NSString *name=[NSString stringWithFormat:@"%@ %@",NSStringFromClass(cls),NSStringFromSelector(sel)];
+    IMP imp=imp_implementationWithBlock(^(id self,float value){TXLog(name);((void(*)(id,SEL,float))old)(self,sel,value);});method_setImplementation(m,imp);
+}
+static void TXHookFloat0(Class cls, SEL sel) {
+    Method m=class_getInstanceMethod(cls,sel);if(!m)return;IMP old=method_getImplementation(m);NSString *name=[NSString stringWithFormat:@"%@ %@",NSStringFromClass(cls),NSStringFromSelector(sel)];
+    IMP imp=imp_implementationWithBlock(^float(id self){TXLog(name);return ((float(*)(id,SEL))old)(self,sel);});method_setImplementation(m,imp);
+}
+static void TXHookVoidBlock(Class cls, SEL sel) {
+    Method m=class_getInstanceMethod(cls,sel);if(!m)return;IMP old=method_getImplementation(m);NSString *name=[NSString stringWithFormat:@"%@ %@",NSStringFromClass(cls),NSStringFromSelector(sel)];
+    IMP imp=imp_implementationWithBlock(^(id self,id block){TXLog(name);((void(*)(id,SEL,id))old)(self,sel,block);});method_setImplementation(m,imp);
+}
+static void TXHookRecordingStart(Class cls) {
+    SEL sel=NSSelectorFromString(@"startSystemRecordingWithMicrophoneEnabled:handler:");Method m=class_getInstanceMethod(cls,sel);if(!m)return;IMP old=method_getImplementation(m);
+    IMP imp=imp_implementationWithBlock(^(id self,BOOL microphone,id block){TXLog(@"RPScreenRecorder startSystemRecordingWithMicrophoneEnabled:handler:");((void(*)(id,SEL,BOOL,id))old)(self,sel,microphone,block);});method_setImplementation(m,imp);
+}
+static void TXInstallTrace(void) {
+    [[NSFileManager defaultManager] removeItemAtPath:@"/var/jb/tmp/touchx-sq-action-trace.txt" error:nil];TXLog(@"BEGIN: selector-name-only trace; no parameters or return values are recorded");
+    Class v=NSClassFromString(@"SBVolumeControl");TXHookVoidFloat(v,NSSelectorFromString(@"setActiveCategoryVolume:"));TXHookFloat0(v,NSSelectorFromString(@"volumeStepUp"));TXHookFloat0(v,NSSelectorFromString(@"volumeStepDown"));
+    Class r=NSClassFromString(@"RPScreenRecorder");TXHookRecordingStart(r);TXHookVoidBlock(r,NSSelectorFromString(@"stopSystemRecording:"));
+    Class vpn=NSClassFromString(@"VPNBundleController");TXHookVoidBool(vpn,NSSelectorFromString(@"setVPNActive:"));
+    TXHookVoid0(NSClassFromString(@"SpringBoard"),NSSelectorFromString(@"takeScreenshot"));
+    TXHookVoidBool(NSClassFromString(@"SBRingerControl"),NSSelectorFromString(@"setRingerMuted:"));
+    TXLog(@"READY: trigger one SQ base action at a time, then export this file");
+}
+%ctor {dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(2*NSEC_PER_SEC)),dispatch_get_main_queue(),^{TXInstallTrace();});}
